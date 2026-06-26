@@ -24,7 +24,7 @@ A gamified, full-stack player progression dashboard that interfaces with live ma
 
 ### Backend & Storage
 - **Node.js & Express:** Architected to handle modular routing, middleware verification, CORS management, and secure, high-speed upstream proxy connections.
-- **PostgreSQL (`pg` pool):** Relational database storage managing user configurations, transactional token states, inventory counters, and composite key match-history checkpoints.
+- **Supabase :** Relational database storage managing user configurations, transactional token states, inventory counters, and composite key match-history checkpoints.
 
 ### APIs & Developer Tools
 - **Riot Games Developer API (`match-v5`, `account-v1`):** Upstream telemetry gateway providing deep player performance metrics.
