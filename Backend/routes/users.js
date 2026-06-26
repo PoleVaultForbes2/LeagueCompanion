@@ -76,6 +76,36 @@ function sendRiotError(res, error) {
   return res.status(502).json({ error: "Riot API request failed" });
 }
 
+function looksLikeDatabaseError(error) {
+  const message = String(error?.message || "").toLowerCase();
+
+  return (
+    Boolean(error?.code) ||
+    message.includes("database") ||
+    message.includes("relation") ||
+    message.includes("connection") ||
+    message.includes("connect") ||
+    message.includes("password authentication")
+  );
+}
+
+function sendRegistrationError(res, error) {
+  if (error instanceof RiotApiError) {
+    return sendRiotError(res, error);
+  }
+
+  console.error("Register error:", error);
+
+  if (looksLikeDatabaseError(error)) {
+    return res.status(500).json({
+      error:
+        "Database setup failed. Check the Supabase DATABASE_URL and run the schema SQL.",
+    });
+  }
+
+  return res.status(500).json({ error: "Failed to create account" });
+}
+
 async function ensureUserProgressColumns(db) {
   await db.query(`
     ALTER TABLE users
@@ -141,7 +171,7 @@ router.post("/register", async (req, res) => {
 
     return res.status(201).json({ user: toUserDto(result.rows[0]) });
   } catch (error) {
-    return sendRiotError(res, error);
+    return sendRegistrationError(res, error);
   }
 });
 

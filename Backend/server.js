@@ -2,6 +2,7 @@
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
+import pool from "./db.js";
 
 // get league match data
 import userRouter from "./routes/users.js";
@@ -43,6 +44,34 @@ app.use(express.json());
 // API routes
 app.get("/api/health", (_req, res) => {
   res.json({ status: "ok" });
+});
+
+app.get("/api/health/db", async (_req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT
+        NOW() AS checked_at,
+        to_regclass('public.users') AS users_table,
+        to_regclass('public.match_checkpoints') AS matches_table
+    `);
+    const row = result.rows[0];
+
+    res.json({
+      status: row.users_table && row.matches_table ? "ok" : "schema_missing",
+      checkedAt: row.checked_at,
+      tables: {
+        users: Boolean(row.users_table),
+        matchCheckpoints: Boolean(row.matches_table),
+      },
+    });
+  } catch (error) {
+    console.error("Database health check failed:", error);
+    res.status(500).json({
+      status: "error",
+      error: "Database connection failed",
+      code: error.code || null,
+    });
+  }
 });
 
 app.use("/api/users", userRouter);
