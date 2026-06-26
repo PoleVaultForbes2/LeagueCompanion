@@ -1,0 +1,12 @@
+Day 1:
+Came up with the idea of the game. 
+Setup the project in vscode and created project_purpose.md and system_context.md for codex.
+Set up backend and database to store information.
+Allowed a user to login using their riot username to link their account. 
+
+Day 2: 
+Created shard icons.
+Created an inventory to store the shards.
+Created the workflow so after a match, the real game info gets translated into XP, levels, shards, etc. 
+Created a screen to view previous games.
+Brainstomed the next goals for the game.
