@@ -48,6 +48,9 @@ LeagueCompanion/
     ├── routes/        # Modular API route controllers
     ├── db.js          # PostgreSQL pg pool lifecycle configuration
     └── server.js      # Backend server configuration & initialization
+```
+
+Hosted on Vercel and Railway. Public URL: https://putlinkhere.com
 
 
 📝 License
