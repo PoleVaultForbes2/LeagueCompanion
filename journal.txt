@@ -10,3 +10,16 @@ Created an inventory to store the shards.
 Created the workflow so after a match, the real game info gets translated into XP, levels, shards, etc. 
 Created a screen to view previous games.
 Brainstomed the next goals for the game.
+
+Day 3:
+Created crafting system logic.
+Ability to craft items, upgrade items, and equip them.
+Changed the home screen to have the map, active champion, and item backpack.
+Created roster with full splash arts for the champions.
+Unlock the first 3 champions based on most played.
+Unlock champion logic by playing and getting kills on them
+
+Day 4:
+Fixed a lot of UI bugs.
+Added CS score as currency to buy more shards.
+Published on Github  + Vercel + appiled for prodcut key.
