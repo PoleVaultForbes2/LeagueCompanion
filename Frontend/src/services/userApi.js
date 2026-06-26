@@ -1,5 +1,28 @@
 // Wraps all browser-to-Express API calls; frontend state only renders server payloads.
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "/api";
+const rawApiBaseUrl =
+  import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_URL || "/api";
+
+function normalizeApiBaseUrl(value) {
+  const trimmedValue = String(value || "/api")
+    .trim()
+    .replace(/\/+$/, "");
+
+  if (!trimmedValue) {
+    return "/api";
+  }
+
+  if (/\/api$/i.test(trimmedValue)) {
+    return trimmedValue;
+  }
+
+  if (/^https?:\/\//i.test(trimmedValue)) {
+    return `${trimmedValue}/api`;
+  }
+
+  return trimmedValue;
+}
+
+const API_BASE_URL = normalizeApiBaseUrl(rawApiBaseUrl);
 
 async function requestJson(path, options = {}) {
   let response;
