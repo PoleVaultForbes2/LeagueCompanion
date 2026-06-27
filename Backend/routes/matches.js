@@ -360,6 +360,13 @@ async function backfillRecentMatchMetadata(db, user, row) {
 
 function sendSyncError(res, error) {
   if (error instanceof RiotApiError) {
+    console.error("Riot match sync request failed:", {
+      status: error.status,
+      message: error.message,
+      context: error.context || null,
+      details: error.details || null,
+    });
+
     if (error.status === 429) {
       return res.status(429).json({ error: "Riot API rate limit reached" });
     }

@@ -117,6 +117,24 @@ export async function getRegionProgress(userId) {
   return requestJson(`/champions/${userId}/regions`);
 }
 
+export async function getMissionState(userId) {
+  return requestJson(`/missions/${userId}`);
+}
+
+export async function acceptMission(userId, missionKey) {
+  return requestJson(`/missions/${userId}/${missionKey}/accept`, {
+    method: "POST",
+    body: JSON.stringify({}),
+  });
+}
+
+export async function completeMission(userId, missionKey) {
+  return requestJson(`/missions/${userId}/${missionKey}/complete`, {
+    method: "POST",
+    body: JSON.stringify({}),
+  });
+}
+
 export async function getLoadoutState(userId) {
   return requestJson(`/loadout/${userId}`);
 }

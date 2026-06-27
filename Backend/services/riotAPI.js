@@ -8,25 +8,42 @@ let cachedChampionDictionary = null;
 let cachedDataDragonVersion = null;
 
 export class RiotApiError extends Error {
-  constructor(message, status, details) {
+  constructor(message, status, details, context = {}) {
     super(message);
     this.name = "RiotApiError";
     this.status = status;
     this.details = details;
+    this.context = context;
   }
 }
 
+function normalizeRiotApiKey(apiKey) {
+  const trimmedKey = String(apiKey || "").trim();
+
+  if (
+    (trimmedKey.startsWith('"') && trimmedKey.endsWith('"')) ||
+    (trimmedKey.startsWith("'") && trimmedKey.endsWith("'"))
+  ) {
+    return trimmedKey.slice(1, -1).trim();
+  }
+
+  return trimmedKey;
+}
+
 async function requestRiotJson(path, apiKey) {
-  if (!apiKey) {
+  const riotApiKey = normalizeRiotApiKey(apiKey);
+
+  if (!riotApiKey) {
     throw new RiotApiError("Missing RIOT_API_KEY in Backend/.env", 500);
   }
 
   let response;
+  const url = `${RIOT_AMERICAS_BASE_URL}${path}`;
 
   try {
-    response = await fetch(`${RIOT_AMERICAS_BASE_URL}${path}`, {
+    response = await fetch(url, {
       headers: {
-        "X-Riot-Token": apiKey,
+        "X-Riot-Token": riotApiKey,
       },
     });
   } catch (error) {
@@ -47,24 +64,31 @@ async function requestRiotJson(path, apiKey) {
     const riotMessage =
       details?.status?.message || details?.message || response.statusText;
 
-    throw new RiotApiError(riotMessage, response.status, details);
+    throw new RiotApiError(riotMessage, response.status, details, {
+      path,
+      region: "americas",
+      statusText: response.statusText,
+    });
   }
 
   return response.json();
 }
 
 async function requestPlatformRiotJson(platform, path, apiKey) {
-  if (!apiKey) {
+  const riotApiKey = normalizeRiotApiKey(apiKey);
+
+  if (!riotApiKey) {
     throw new RiotApiError("Missing RIOT_API_KEY in Backend/.env", 500);
   }
 
   const platformRoute = String(platform || "na1").toLowerCase();
   let response;
+  const url = `https://${platformRoute}.api.riotgames.com${path}`;
 
   try {
-    response = await fetch(`https://${platformRoute}.api.riotgames.com${path}`, {
+    response = await fetch(url, {
       headers: {
-        "X-Riot-Token": apiKey,
+        "X-Riot-Token": riotApiKey,
       },
     });
   } catch (error) {
@@ -85,7 +109,11 @@ async function requestPlatformRiotJson(platform, path, apiKey) {
     const riotMessage =
       details?.status?.message || details?.message || response.statusText;
 
-    throw new RiotApiError(riotMessage, response.status, details);
+    throw new RiotApiError(riotMessage, response.status, details, {
+      path,
+      region: platformRoute,
+      statusText: response.statusText,
+    });
   }
 
   return response.json();

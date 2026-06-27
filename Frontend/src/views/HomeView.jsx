@@ -1,11 +1,14 @@
 // Renders the authenticated multi-page dashboard from backend-provided game state.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  acceptMission as acceptMissionRequest,
   buyShardWithCs,
+  completeMission as completeMissionRequest,
   craftItem,
   getChampionRoster,
   getCraftingState,
   getLoadoutState,
+  getMissionState,
   getRegionProgress,
   getShardInventory,
   getUserProfile,
@@ -14,6 +17,7 @@ import {
   syncRecentMatches,
   upgradeItem,
 } from "../services/userApi";
+import SwarmTrial from "../components/SwarmTrial";
 import RecentGamesView from "./RecentGamesView";
 
 const PAGES = [
@@ -258,6 +262,11 @@ const emptyRegionProgress = {
   totalPoints: 0,
 };
 
+const emptyMissionState = {
+  missions: [],
+  activeMission: null,
+};
+
 const ITEM_CATEGORY_ORDER = [
   "ad_shard",
   "crit_shard",
@@ -356,11 +365,14 @@ export default function HomeView({ user, onLogout, onUserUpdated }) {
   const [championRoster, setChampionRoster] = useState(CHAMPION_ROSTER);
   const [loadout, setLoadout] = useState(emptyLoadout);
   const [regionProgress, setRegionProgress] = useState(emptyRegionProgress);
+  const [missionState, setMissionState] = useState(emptyMissionState);
   const [isInventoryLoading, setIsInventoryLoading] = useState(true);
   const [isCraftingLoading, setIsCraftingLoading] = useState(true);
   const [isRosterLoading, setIsRosterLoading] = useState(true);
   const [isLoadoutLoading, setIsLoadoutLoading] = useState(true);
   const [isRegionProgressLoading, setIsRegionProgressLoading] = useState(true);
+  const [isMissionLoading, setIsMissionLoading] = useState(true);
+  const [isMissionActionLoading, setIsMissionActionLoading] = useState(false);
   const [isCrafting, setIsCrafting] = useState(false);
   const [isBuyingShard, setIsBuyingShard] = useState(false);
   const [isSavingLoadout, setIsSavingLoadout] = useState(false);
@@ -375,6 +387,12 @@ export default function HomeView({ user, onLogout, onUserUpdated }) {
   const [inventoryTab, setInventoryTab] = useState("shards");
   const [isRecentGamesOpen, setIsRecentGamesOpen] = useState(false);
   const [isRegionModalOpen, setIsRegionModalOpen] = useState(false);
+  const [selectedMission, setSelectedMission] = useState(null);
+  const [missionPrompt, setMissionPrompt] = useState(null);
+  const [missionScene, setMissionScene] = useState(null);
+  const [missionSceneStep, setMissionSceneStep] = useState(0);
+  const [missionCompletion, setMissionCompletion] = useState(null);
+  const [swarmMission, setSwarmMission] = useState(null);
   const [selectedChampion, setSelectedChampion] = useState(null);
   const [selectedInventoryItem, setSelectedInventoryItem] = useState(null);
   const [pendingBackpackItem, setPendingBackpackItem] = useState(null);
@@ -425,6 +443,7 @@ export default function HomeView({ user, onLogout, onUserUpdated }) {
         championPayload,
         loadoutPayload,
         regionProgressPayload,
+        missionPayload,
       ] = await Promise.all([
         getUserProfile(user.id),
         getShardInventory(user.id),
@@ -432,6 +451,7 @@ export default function HomeView({ user, onLogout, onUserUpdated }) {
         getChampionRoster(user.id),
         getLoadoutState(user.id),
         getRegionProgress(user.id),
+        getMissionState(user.id),
       ]);
 
       onUserUpdated(profilePayload.user);
@@ -440,6 +460,7 @@ export default function HomeView({ user, onLogout, onUserUpdated }) {
       setChampionRoster(championPayload.champions || CHAMPION_ROSTER);
       setLoadout(loadoutPayload || emptyLoadout);
       setRegionProgress(regionProgressPayload || emptyRegionProgress);
+      setMissionState(missionPayload || emptyMissionState);
       setSelectedCraftItemName((current) =>
         current || craftingPayload.items?.[0]?.name || "",
       );
@@ -452,6 +473,7 @@ export default function HomeView({ user, onLogout, onUserUpdated }) {
       setIsRosterLoading(false);
       setIsLoadoutLoading(false);
       setIsRegionProgressLoading(false);
+      setIsMissionLoading(false);
       setIsRefreshing(false);
     }
   }, [onUserUpdated, user.id]);
@@ -494,6 +516,99 @@ export default function HomeView({ user, onLogout, onUserUpdated }) {
   function goToPage(nextIndex) {
     setCurrentPageIndex(Math.min(Math.max(nextIndex, 0), PAGES.length - 1));
     setIsRecentGamesOpen(false);
+  }
+
+  function openMissionPrompt() {
+    const activeMission = missionState.activeMission;
+
+    setMissionPrompt(
+      activeMission
+        ? { type: "active", mission: activeMission }
+        : { type: "empty", mission: null },
+    );
+  }
+
+  async function handleAcceptMission(mission) {
+    if (!mission?.key || isMissionActionLoading) {
+      return;
+    }
+
+    setIsMissionActionLoading(true);
+    setSyncStatus("");
+    setSyncError("");
+
+    try {
+      const payload = await acceptMissionRequest(user.id, mission.key);
+      setMissionState(payload.missionState || emptyMissionState);
+      setSelectedMission(null);
+      setSyncStatus(`${mission.title} accepted.`);
+    } catch (requestError) {
+      setSyncError(requestError.message);
+    } finally {
+      setIsMissionActionLoading(false);
+    }
+  }
+
+  function startMissionScene(mission) {
+    setMissionPrompt(null);
+    setMissionScene(mission);
+    setMissionSceneStep(0);
+    setMissionCompletion(null);
+  }
+
+  function startSwarmTrial(mission) {
+    setMissionPrompt(null);
+    setMissionScene(null);
+    setMissionSceneStep(0);
+    setMissionCompletion(null);
+    setSwarmMission(mission);
+  }
+
+  async function handleMissionSceneNext() {
+    if (!missionScene || isMissionActionLoading) {
+      return;
+    }
+
+    const dialogue = missionScene.scene?.dialogue || [];
+
+    if (missionSceneStep < dialogue.length - 1) {
+      setMissionSceneStep((current) => current + 1);
+      return;
+    }
+
+    setIsMissionActionLoading(true);
+    setSyncStatus("");
+    setSyncError("");
+
+    try {
+      const payload = await completeMissionRequest(user.id, missionScene.key);
+      setMissionState(payload.missionState || emptyMissionState);
+      setMissionCompletion({
+        mission: missionScene,
+        rewards: payload.rewards || [],
+      });
+      setRegionProgress(await getRegionProgress(user.id));
+
+      if (payload.user) {
+        onUserUpdated(payload.user);
+      }
+    } catch (requestError) {
+      setSyncError(requestError.message);
+    } finally {
+      setIsMissionActionLoading(false);
+    }
+  }
+
+  function returnHomeFromMission() {
+    setMissionScene(null);
+    setMissionSceneStep(0);
+    setMissionCompletion(null);
+    setCurrentPageIndex(2);
+  }
+
+  function returnHomeFromSwarm() {
+    setSwarmMission(null);
+    setCurrentPageIndex(2);
   }
 
   function toggleCraftShard(shardKey) {
@@ -834,6 +949,9 @@ export default function HomeView({ user, onLogout, onUserUpdated }) {
                   <PagePane>
                     <MissionsPage
                       isRegionProgressLoading={isRegionProgressLoading}
+                      isMissionLoading={isMissionLoading}
+                      missions={missionState.missions}
+                      onMissionSelected={setSelectedMission}
                       onViewRegionPoints={() => setIsRegionModalOpen(true)}
                       regionProgress={regionProgress}
                     />
@@ -849,8 +967,10 @@ export default function HomeView({ user, onLogout, onUserUpdated }) {
                   </PagePane>
                   <PagePane>
                     <MapHomePage
+                      activeMission={missionState.activeMission}
                       isLoadoutLoading={isLoadoutLoading}
                       loadout={loadout}
+                      onMapSelected={openMissionPrompt}
                     />
                   </PagePane>
                   <PagePane>
@@ -930,6 +1050,28 @@ export default function HomeView({ user, onLogout, onUserUpdated }) {
         onClose={() => setIsRegionModalOpen(false)}
         regionProgress={regionProgress}
       />
+      <MissionDetailsModal
+        isSaving={isMissionActionLoading}
+        mission={selectedMission}
+        onAccept={handleAcceptMission}
+        onClose={() => setSelectedMission(null)}
+      />
+      <MissionTravelPrompt
+        isOpen={Boolean(missionPrompt)}
+        onClose={() => setMissionPrompt(null)}
+        onStart={() => startMissionScene(missionPrompt?.mission)}
+        onStartSwarm={() => startSwarmTrial(missionPrompt?.mission)}
+        prompt={missionPrompt}
+      />
+      <MissionScene
+        completion={missionCompletion}
+        isCompleting={isMissionActionLoading}
+        mission={missionScene}
+        onGoHome={returnHomeFromMission}
+        onNext={handleMissionSceneNext}
+        stepIndex={missionSceneStep}
+      />
+      <SwarmTrial mission={swarmMission} onExit={returnHomeFromSwarm} />
     </main>
   );
 }
@@ -968,33 +1110,86 @@ function PagePanel({ children, className = "" }) {
 
 function MissionsPage({
   isRegionProgressLoading,
+  isMissionLoading,
+  missions,
+  onMissionSelected,
   onViewRegionPoints,
   regionProgress,
 }) {
   return (
-    <PagePanel className="flex items-center justify-center">
-      <div className="text-center">
-        <p className="text-3xl font-black tracking-normal text-slate-300">
-          Missions coming soon...
-        </p>
+    <PagePanel>
+      <div className="mb-5 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <p className="text-xs font-bold uppercase tracking-widest text-cyan-200">
+            Missions
+          </p>
+          <h2 className="mt-1 text-3xl font-black tracking-normal text-slate-50">
+            Quest Board
+          </h2>
+        </div>
         <button
-          className="mt-6 rounded border border-cyan-300/25 bg-slate-950/80 px-5 py-3 text-sm font-black uppercase tracking-wide text-cyan-100 transition hover:border-cyan-300/60 hover:bg-slate-950"
+          className="rounded border border-cyan-300/25 bg-slate-950/80 px-5 py-3 text-sm font-black uppercase tracking-wide text-cyan-100 transition hover:border-cyan-300/60 hover:bg-slate-950"
           onClick={onViewRegionPoints}
           type="button"
         >
           View Region Points
         </button>
-        <p className="mt-3 text-xs font-bold uppercase tracking-widest text-slate-500">
-          {isRegionProgressLoading
-            ? "Loading regions..."
-            : `${regionProgress.totalPoints || 0} total points`}
-        </p>
       </div>
+
+      <p className="mb-5 text-xs font-bold uppercase tracking-widest text-slate-500">
+        {isRegionProgressLoading
+          ? "Loading regions..."
+          : `${regionProgress.totalPoints || 0} total region points`}
+      </p>
+
+      {isMissionLoading ? (
+        <div className="flex min-h-[320px] items-center justify-center rounded border border-slate-800 bg-slate-950/60 text-sm font-bold uppercase tracking-widest text-slate-500">
+          Loading missions...
+        </div>
+      ) : (
+        <div className="grid gap-4 lg:grid-cols-2">
+          {(missions || []).map((mission) => (
+            <button
+              className="rounded-lg border border-amber-300/25 bg-slate-950/75 p-5 text-left shadow-xl shadow-amber-950/10 transition hover:-translate-y-0.5 hover:border-amber-300/60 hover:bg-slate-950"
+              key={mission.key}
+              onClick={() => onMissionSelected(mission)}
+              type="button"
+            >
+              <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <h3 className="break-words text-2xl font-black tracking-normal text-slate-50">
+                    {mission.title}
+                  </h3>
+                  <p className="mt-2 text-sm font-semibold leading-6 text-slate-400">
+                    {mission.description}
+                  </p>
+                </div>
+                <span className="rounded border border-amber-300/30 bg-amber-400/10 px-3 py-1 text-xs font-black uppercase tracking-wide text-amber-100">
+                  {mission.region}
+                </span>
+              </div>
+
+              <div className="flex flex-wrap gap-2">
+                <span className="rounded border border-cyan-300/25 bg-cyan-500/10 px-3 py-2 text-xs font-black uppercase tracking-wide text-cyan-100">
+                  {mission.requirementText}
+                </span>
+                <span className="rounded border border-slate-700 bg-slate-900 px-3 py-2 text-xs font-black uppercase tracking-wide text-slate-300">
+                  {mission.isActive
+                    ? "Active"
+                    : mission.isCompleted
+                      ? "Completed"
+                      : "Available"}
+                </span>
+              </div>
+            </button>
+          ))}
+        </div>
+      )}
     </PagePanel>
   );
 }
 
-function MapHomePage({ isLoadoutLoading, loadout }) {
+function MapHomePage({ activeMission, isLoadoutLoading, loadout, onMapSelected }) {
   const activeChampion = loadout.activeChampion;
   const backpackSlots = loadout.backpack || emptyLoadout.backpack;
 
@@ -1066,13 +1261,27 @@ function MapHomePage({ isLoadoutLoading, loadout }) {
         </div>
       </aside>
 
-      <div className="flex min-h-[360px] items-center justify-center overflow-hidden rounded border border-cyan-300/20 bg-slate-950/70 p-3 shadow-inner shadow-cyan-950/30">
+      <button
+        className="group relative flex min-h-[360px] items-center justify-center overflow-hidden rounded border border-cyan-300/20 bg-slate-950/70 p-3 text-left shadow-inner shadow-cyan-950/30 transition hover:border-amber-300/50"
+        onClick={onMapSelected}
+        type="button"
+      >
         <img
           alt=""
-          className="max-h-[620px] w-full object-contain"
+          className="max-h-[620px] w-full object-contain transition duration-300 group-hover:scale-[1.02]"
           src="/assets/world_map.png"
         />
-      </div>
+        <div className="absolute bottom-4 left-4 right-4 rounded border border-slate-700 bg-slate-950/85 p-3 shadow-xl shadow-slate-950">
+          <p className="text-xs font-black uppercase tracking-widest text-amber-200">
+            {activeMission ? "Active Mission" : "Map"}
+          </p>
+          <p className="mt-1 text-sm font-bold text-slate-200">
+            {activeMission
+              ? `Click to travel to ${activeMission.title}`
+              : "Click to check for an active mission"}
+          </p>
+        </div>
+      </button>
     </PagePanel>
   );
 }
@@ -2069,6 +2278,254 @@ function RegionPointsModal({ isLoading, isOpen, onClose, regionProgress }) {
           </div>
         )}
       </section>
+    </div>
+  );
+}
+
+function MissionDetailsModal({ isSaving, mission, onAccept, onClose }) {
+  if (!mission) {
+    return null;
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/85 px-4 py-6 backdrop-blur-sm">
+      <section className="w-full max-w-2xl overflow-hidden rounded-lg border border-amber-300/35 bg-slate-950 shadow-2xl shadow-amber-950/40">
+        <div className="border-b border-slate-800 bg-slate-900/80 p-5 sm:p-6">
+          <div className="flex items-start justify-between gap-4">
+            <div className="min-w-0">
+              <p className="text-xs font-black uppercase tracking-widest text-amber-200">
+                {mission.region}
+              </p>
+              <h2 className="mt-2 break-words text-3xl font-black tracking-normal text-slate-50">
+                {mission.title}
+              </h2>
+            </div>
+            <button
+              aria-label="Close mission"
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded border border-slate-700 text-xl font-black text-slate-300 transition hover:border-rose-300/60 hover:text-rose-200"
+              onClick={onClose}
+              type="button"
+            >
+              X
+            </button>
+          </div>
+        </div>
+
+        <div className="p-5 sm:p-6">
+          <p className="text-base font-semibold leading-7 text-slate-300">
+            {mission.description}
+          </p>
+
+          <div className="mt-5 grid gap-3 sm:grid-cols-2">
+            <div className="rounded border border-slate-700 bg-slate-900 p-4">
+              <p className="text-xs font-bold uppercase tracking-widest text-slate-500">
+                Requirement
+              </p>
+              <p className="mt-2 text-lg font-black text-cyan-100">
+                {mission.requirementText}
+              </p>
+            </div>
+            <div className="rounded border border-slate-700 bg-slate-900 p-4">
+              <p className="text-xs font-bold uppercase tracking-widest text-slate-500">
+                Mission Giver
+              </p>
+              <p className="mt-2 text-lg font-black text-amber-100">
+                {mission.giver?.name || "Unknown"}
+              </p>
+            </div>
+          </div>
+
+          <button
+            className="mt-6 h-12 w-full rounded bg-amber-400 px-5 text-sm font-black uppercase tracking-wide text-slate-950 shadow-lg shadow-amber-950/30 transition hover:bg-amber-300 disabled:cursor-not-allowed disabled:bg-slate-600 disabled:text-slate-300"
+            disabled={isSaving || mission.isActive}
+            onClick={() => onAccept(mission)}
+            type="button"
+          >
+            {isSaving
+              ? "Accepting..."
+              : mission.isActive
+                ? "Active Mission"
+                : mission.isCompleted
+                  ? "Replay Mission"
+                  : "Accept"}
+          </button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function MissionTravelPrompt({ isOpen, onClose, onStart, onStartSwarm, prompt }) {
+  if (!isOpen) {
+    return null;
+  }
+
+  const mission = prompt?.mission || null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/85 px-4 py-6 backdrop-blur-sm">
+      <section className="w-full max-w-lg rounded-lg border border-cyan-300/35 bg-slate-950 p-5 shadow-2xl shadow-cyan-950/40 sm:p-6">
+        <h2 className="text-2xl font-black tracking-normal text-slate-50">
+          {mission ? "Begin Mission" : "No Active Mission"}
+        </h2>
+        <p className="mt-3 text-base font-semibold leading-7 text-slate-300">
+          {mission
+            ? `Do you want to go on ${mission.title}?`
+            : "Accept a mission from the Missions page before traveling from the map."}
+        </p>
+
+        <div className="mt-6 grid gap-3 sm:grid-cols-3">
+          <button
+            className="h-11 rounded border border-slate-700 bg-slate-900 px-4 text-sm font-black uppercase tracking-wide text-slate-300 transition hover:border-slate-500 hover:text-slate-100"
+            onClick={onClose}
+            type="button"
+          >
+            Close
+          </button>
+          {mission && (
+            <>
+              <button
+                className="h-11 rounded border border-cyan-300/40 bg-cyan-500/10 px-4 text-sm font-black uppercase tracking-wide text-cyan-100 transition hover:border-cyan-300/70 hover:bg-cyan-500/20"
+                onClick={onStart}
+                type="button"
+              >
+                Story
+              </button>
+              <button
+                className="h-11 rounded bg-amber-400 px-4 text-sm font-black uppercase tracking-wide text-slate-950 transition hover:bg-amber-300"
+                onClick={onStartSwarm}
+                type="button"
+              >
+                Swarm Demo
+              </button>
+            </>
+          )}
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function MissionScene({
+  completion,
+  isCompleting,
+  mission,
+  onGoHome,
+  onNext,
+  stepIndex,
+}) {
+  const [hasEntered, setHasEntered] = useState(false);
+
+  useEffect(() => {
+    if (!mission) {
+      setHasEntered(false);
+      return undefined;
+    }
+
+    setHasEntered(false);
+    const timer = window.setTimeout(() => setHasEntered(true), 80);
+
+    return () => window.clearTimeout(timer);
+  }, [mission]);
+
+  if (!mission) {
+    return null;
+  }
+
+  const dialogue = mission.scene?.dialogue || [];
+  const currentLine = dialogue[stepIndex] || dialogue[0] || null;
+  const background =
+    mission.scene?.backgrounds?.[stepIndex >= 3 ? 1 : 0] ||
+    mission.scene?.backgrounds?.[0];
+
+  return (
+    <div className="fixed inset-0 z-[60] bg-slate-950 text-slate-100">
+      <div
+        className="relative flex h-full min-h-screen overflow-hidden bg-cover bg-center"
+        style={{ backgroundImage: `url("${background}")` }}
+      >
+        <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/30 to-slate-950/20" />
+
+        <img
+          alt=""
+          className="absolute bottom-28 left-4 h-[42vh] max-h-[420px] object-contain drop-shadow-2xl transition duration-700 ease-out sm:left-16"
+          src={mission.hero?.spritePath}
+          style={{
+            transform: hasEntered ? "translateX(0)" : "translateX(-120%)",
+          }}
+        />
+        <img
+          alt=""
+          className="absolute bottom-28 right-4 h-[42vh] max-h-[420px] object-contain drop-shadow-2xl transition duration-700 ease-out sm:right-16"
+          src={mission.giver?.spritePath}
+          style={{
+            transform: hasEntered ? "translateX(0)" : "translateX(120%)",
+          }}
+        />
+
+        <div className="absolute left-4 right-4 top-4 flex items-center justify-between gap-3 rounded border border-amber-300/25 bg-slate-950/75 px-4 py-3 shadow-xl shadow-slate-950 sm:left-6 sm:right-6">
+          <div>
+            <p className="text-xs font-black uppercase tracking-widest text-amber-200">
+              {mission.region}
+            </p>
+            <p className="text-xl font-black text-slate-50">{mission.title}</p>
+          </div>
+          <p className="rounded border border-slate-700 bg-slate-900 px-3 py-1 text-xs font-black uppercase tracking-wide text-slate-300">
+            Trial Scene
+          </p>
+        </div>
+
+        <div className="absolute bottom-4 left-4 right-4 rounded-lg border border-slate-700 bg-slate-950/90 p-4 shadow-2xl shadow-slate-950 sm:bottom-6 sm:left-6 sm:right-6 sm:p-5">
+          {completion ? (
+            <>
+              <p className="text-xs font-black uppercase tracking-widest text-emerald-200">
+                Mission Finished
+              </p>
+              <h2 className="mt-2 text-3xl font-black tracking-normal text-slate-50">
+                Your Rewards
+              </h2>
+              <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                {(completion.rewards || []).map((reward) => (
+                  <div
+                    className="rounded border border-emerald-300/25 bg-emerald-500/10 px-4 py-3 text-lg font-black text-emerald-100"
+                    key={`${reward.type}-${reward.label}`}
+                  >
+                    {reward.text}
+                  </div>
+                ))}
+              </div>
+              <button
+                className="mt-5 h-12 w-full rounded bg-amber-400 px-5 text-sm font-black uppercase tracking-wide text-slate-950 transition hover:bg-amber-300"
+                onClick={onGoHome}
+                type="button"
+              >
+                Go Back Home
+              </button>
+            </>
+          ) : (
+            <>
+              <p className="text-xs font-black uppercase tracking-widest text-cyan-200">
+                {currentLine?.speaker || "Narrator"}
+              </p>
+              <p className="mt-3 min-h-16 text-xl font-black leading-8 text-slate-100">
+                {currentLine?.text || "The mission begins."}
+              </p>
+              <button
+                className="mt-5 h-12 w-full rounded bg-cyan-300 px-5 text-sm font-black uppercase tracking-wide text-slate-950 transition hover:bg-cyan-200 disabled:cursor-wait disabled:bg-slate-600 disabled:text-slate-300"
+                disabled={isCompleting}
+                onClick={onNext}
+                type="button"
+              >
+                {isCompleting
+                  ? "Resolving..."
+                  : stepIndex >= dialogue.length - 1
+                    ? "Finish Mission"
+                    : "Continue"}
+              </button>
+            </>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

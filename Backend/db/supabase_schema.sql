@@ -88,6 +88,18 @@ CREATE TABLE IF NOT EXISTS player_region_points (
   UNIQUE (user_id, region_key)
 );
 
+CREATE TABLE IF NOT EXISTS player_missions (
+  id SERIAL PRIMARY KEY,
+  user_id INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  mission_key VARCHAR(80) NOT NULL,
+  status VARCHAR(20) NOT NULL DEFAULT 'available'
+    CHECK (status IN ('available', 'active', 'completed')),
+  accepted_at TIMESTAMP WITH TIME ZONE,
+  completed_at TIMESTAMP WITH TIME ZONE,
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE (user_id, mission_key)
+);
+
 CREATE TABLE IF NOT EXISTS player_loadouts (
   user_id INT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
   active_champion_slug VARCHAR(80),
@@ -137,6 +149,9 @@ CREATE INDEX IF NOT EXISTS idx_player_champions_user_id
 
 CREATE INDEX IF NOT EXISTS idx_player_region_points_user_id
   ON player_region_points(user_id);
+
+CREATE INDEX IF NOT EXISTS idx_player_missions_user_status
+  ON player_missions(user_id, status);
 
 CREATE INDEX IF NOT EXISTS idx_player_backpack_slots_user_id
   ON player_backpack_slots(user_id);
