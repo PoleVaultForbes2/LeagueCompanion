@@ -125,9 +125,17 @@ async function requestExternalJson(url) {
   try {
     response = await fetch(url);
   } catch (error) {
-    throw new RiotApiError("Backend could not reach Data Dragon item data", 503, {
-      cause: error.message,
-    });
+    throw new RiotApiError(
+      "Backend could not reach Data Dragon item data",
+      503,
+      {
+        cause: error.message,
+      },
+      {
+        source: "data-dragon",
+        url,
+      },
+    );
   }
 
   if (!response.ok) {
@@ -140,7 +148,11 @@ async function requestExternalJson(url) {
     }
 
     const message = details?.status?.message || details?.message || response.statusText;
-    throw new RiotApiError(message, response.status, details);
+    throw new RiotApiError(message, response.status, details, {
+      source: "data-dragon",
+      statusText: response.statusText,
+      url,
+    });
   }
 
   return response.json();
@@ -263,11 +275,31 @@ export async function getDataDragonItemDictionary() {
     return cachedItemDictionary;
   }
 
-  const latestVersion = await getDataDragonVersion();
+  const versions = await requestExternalJson(`${DDRAGON_BASE_URL}/api/versions.json`);
+  let lastError = null;
+  let payload = null;
+  let itemVersion = null;
 
-  const payload = await requestExternalJson(
-    `${DDRAGON_BASE_URL}/cdn/${latestVersion}/data/en_US/item.json`,
-  );
+  for (const version of versions.slice(0, 5)) {
+    try {
+      payload = await requestExternalJson(
+        `${DDRAGON_BASE_URL}/cdn/${version}/data/en_US/item.json`,
+      );
+      itemVersion = version;
+      cachedDataDragonVersion = version;
+      break;
+    } catch (error) {
+      lastError = error;
+      console.warn(`Data Dragon item data unavailable for ${version}:`, {
+        status: error.status || null,
+        message: error.message,
+      });
+    }
+  }
+
+  if (!payload || !itemVersion) {
+    throw lastError || new RiotApiError("Unable to resolve Data Dragon item data", 502);
+  }
 
   cachedItemDictionary = new Map(
     Object.entries(payload?.data || {}).map(([itemId, item]) => [
@@ -276,7 +308,7 @@ export async function getDataDragonItemDictionary() {
         id: Number(itemId),
         name: item.name,
         imageFull: item.image?.full || `${itemId}.png`,
-        iconUrl: `${DDRAGON_BASE_URL}/cdn/${latestVersion}/img/item/${
+        iconUrl: `${DDRAGON_BASE_URL}/cdn/${itemVersion}/img/item/${
           item.image?.full || `${itemId}.png`
         }`,
       },

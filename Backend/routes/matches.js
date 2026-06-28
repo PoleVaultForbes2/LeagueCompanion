@@ -360,6 +360,14 @@ async function backfillRecentMatchMetadata(db, user, row) {
 
 function sendSyncError(res, error) {
   if (error instanceof RiotApiError) {
+    const upstream = {
+      status: error.status || null,
+      message: error.message,
+      source: error.context?.source || error.context?.region || "riot",
+      path: error.context?.path || null,
+      url: error.context?.source === "data-dragon" ? error.context?.url || null : null,
+    };
+
     console.error("Riot match sync request failed:", {
       status: error.status,
       message: error.message,
@@ -368,18 +376,22 @@ function sendSyncError(res, error) {
     });
 
     if (error.status === 429) {
-      return res.status(429).json({ error: "Riot API rate limit reached" });
+      return res
+        .status(429)
+        .json({ error: "Riot API rate limit reached", upstream });
     }
 
     if (error.status === 401 || error.status === 403) {
-      return res.status(502).json({ error: "Riot API key was rejected" });
+      return res
+        .status(502)
+        .json({ error: "Riot API key was rejected", upstream });
     }
 
     if (error.status === 503) {
-      return res.status(502).json({ error: error.message });
+      return res.status(502).json({ error: error.message, upstream });
     }
 
-    return res.status(502).json({ error: "Riot API request failed" });
+    return res.status(502).json({ error: "Riot API request failed", upstream });
   }
 
   console.error("Match sync error:", error);

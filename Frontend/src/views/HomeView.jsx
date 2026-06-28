@@ -358,6 +358,20 @@ function filterChampionsBySearch(champions, searchTerm) {
   );
 }
 
+function formatRequestErrorMessage(error) {
+  const upstream = error.payload?.upstream;
+
+  if (!upstream) {
+    return error.message;
+  }
+
+  const status = upstream.status ? `${upstream.status} ` : "";
+  const source = upstream.source ? `${upstream.source}: ` : "";
+  const detail = upstream.message || upstream.path || upstream.url || "";
+
+  return `${error.message} (${status}${source}${detail})`;
+}
+
 export default function HomeView({ user, onLogout, onUserUpdated }) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [inventory, setInventory] = useState(emptyInventory);
@@ -499,7 +513,7 @@ export default function HomeView({ user, onLogout, onUserUpdated }) {
         setSyncStatus("No new matches found.");
       }
     } catch (requestError) {
-      setSyncError(requestError.message);
+      setSyncError(formatRequestErrorMessage(requestError));
       setSyncStatus("");
     } finally {
       setIsSyncing(false);
