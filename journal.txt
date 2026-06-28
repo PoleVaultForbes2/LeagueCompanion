@@ -23,3 +23,9 @@ Day 4:
 Fixed a lot of UI bugs.
 Added CS score as currency to buy more shards.
 Published on Github  + Vercel + appiled for prodcut key.
+
+Day 5: 
+Got everything working and hosted so I could share with friends
+Worked on sprites 
+Did a demo mission 
+Did a demo version of swarm
