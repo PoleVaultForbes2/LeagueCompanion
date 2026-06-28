@@ -1,6 +1,6 @@
 # 🏆 League Companion
 
-VISIT HERE: https://league-companion-d5l3fonra-forbes-birds.vercel.app/
+VISIT HERE: [https://league-companion-d5l3fonra-forbes-birds.vercel.app/](https://league-companion-smoky.vercel.app/)
 
 A gamified, full-stack player progression dashboard that interfaces with live match telemetry to turn your real-world League of Legends games into an immersive item-crafting and champion-collecting loop. 
 
@@ -52,7 +52,7 @@ LeagueCompanion/
     └── server.js      # Backend server configuration & initialization
 ```
 
-Hosted on Vercel and Render. Public URL: [https://putlinkhere.com](https://league-companion-d5l3fonra-forbes-birds.vercel.app/)
+Hosted on Vercel and Render. [Public URL: [https://putlinkhere.com](https://league-companion-d5l3fonra-forbes-birds.vercel.app/)](https://league-companion-smoky.vercel.app/)
 
 
 📝 License
