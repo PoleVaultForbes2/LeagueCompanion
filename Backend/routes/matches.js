@@ -7,6 +7,7 @@ import {
   getDataDragonItemDictionary,
   getMatchDetails,
   getRecentMatches,
+  getRiotAccountById,
   RiotApiError,
 } from "../services/riotAPI.js";
 import {
@@ -271,6 +272,55 @@ async function getUserForSync(userId) {
   return result.rows[0] || null;
 }
 
+function isRiotPuuidDecryptError(error) {
+  return (
+    error instanceof RiotApiError &&
+    error.status === 400 &&
+    String(error.message || "").toLowerCase().includes("exception decrypting")
+  );
+}
+
+async function refreshRiotIdentityForSync(user) {
+  const account = await getRiotAccountById(
+    user.summoner_name,
+    user.tagline,
+    RIOT_KEY,
+  );
+
+  if (!account?.puuid) {
+    throw new RiotApiError("Riot account lookup did not return a PUUID", 502, {
+      gameName: user.summoner_name,
+      tagLine: user.tagline,
+    });
+  }
+
+  const result = await pool.query(
+    `UPDATE users
+     SET summoner_name = $2,
+         tagline = $3,
+         riot_puuid = $4,
+         updated_at = CURRENT_TIMESTAMP
+     WHERE id = $1
+     RETURNING id, summoner_name, tagline, riot_puuid, summoner_level, app_level, app_xp, cs_currency, checkpoint_game_id, created_at, updated_at`,
+    [
+      user.id,
+      account.gameName || user.summoner_name,
+      account.tagLine || user.tagline,
+      account.puuid,
+    ],
+  );
+
+  console.warn("Refreshed stored Riot PUUID after decrypt failure:", {
+    userId: user.id,
+    summonerName: result.rows[0]?.summoner_name || user.summoner_name,
+    tagline: result.rows[0]?.tagline || user.tagline,
+    oldPuuidSuffix: String(user.riot_puuid || "").slice(-8),
+    newPuuidSuffix: String(account.puuid || "").slice(-8),
+  });
+
+  return result.rows[0] || { ...user, riot_puuid: account.puuid };
+}
+
 async function getStoredCheckpointGameId(db, userId) {
   const result = await db.query(
     `SELECT match_id
@@ -434,9 +484,30 @@ async function syncRecentMatches(user) {
   await ensureMatchSyncColumns(pool);
   await backfillRegionPointsFromStoredMatches(pool, user.id);
 
+  let syncUser = user;
   const storedCheckpointGameId =
     user.checkpoint_game_id || (await getStoredCheckpointGameId(pool, user.id));
-  const matchIds = await getRecentMatches(user.riot_puuid, MAX_SYNC_LOOKBACK, RIOT_KEY);
+  let matchIds;
+
+  try {
+    matchIds = await getRecentMatches(
+      syncUser.riot_puuid,
+      MAX_SYNC_LOOKBACK,
+      RIOT_KEY,
+    );
+  } catch (error) {
+    if (!isRiotPuuidDecryptError(error)) {
+      throw error;
+    }
+
+    syncUser = await refreshRiotIdentityForSync(syncUser);
+    matchIds = await getRecentMatches(
+      syncUser.riot_puuid,
+      MAX_SYNC_LOOKBACK,
+      RIOT_KEY,
+    );
+  }
+
   const { matchIdsToProcess, nextCheckpointGameId } = getMatchSyncWindow(
     matchIds,
     storedCheckpointGameId,
@@ -444,7 +515,7 @@ async function syncRecentMatches(user) {
 
   const existingMatches = await pool.query(
     "SELECT match_id FROM match_checkpoints WHERE user_id = $1",
-    [user.id],
+    [syncUser.id],
   );
   const existingMatchIds = new Set(
     existingMatches.rows.map((row) => row.match_id),
@@ -459,7 +530,7 @@ async function syncRecentMatches(user) {
 
     const match = await getMatchDetails(matchId, RIOT_KEY);
     const participant = match.info?.participants?.find(
-      (player) => player.puuid === user.riot_puuid,
+      (player) => player.puuid === syncUser.riot_puuid,
     );
 
     if (!participant) {
@@ -475,13 +546,13 @@ async function syncRecentMatches(user) {
   if (candidates.length === 0) {
     const checkpointUser =
       nextCheckpointGameId && nextCheckpointGameId !== user.checkpoint_game_id
-        ? await updateCheckpointGame(pool, user.id, nextCheckpointGameId)
+        ? await updateCheckpointGame(pool, syncUser.id, nextCheckpointGameId)
         : null;
 
     return {
       insertedMatches: [],
       rewardClaim: null,
-      user: checkpointUser || user,
+      user: checkpointUser || syncUser,
     };
   }
 
@@ -492,7 +563,7 @@ async function syncRecentMatches(user) {
   const shardTotals = {};
   let totalXp = 0;
   let totalCs = 0;
-  let updatedUser = user;
+  let updatedUser = syncUser;
 
   try {
     await client.query("BEGIN");
@@ -505,7 +576,7 @@ async function syncRecentMatches(user) {
          WHERE user_id = $1
          AND match_id = $2
          LIMIT 1`,
-        [user.id, matchId],
+        [syncUser.id, matchId],
       );
 
       if (existingCheckpoint.rows[0]) {
@@ -533,7 +604,7 @@ async function syncRecentMatches(user) {
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10::jsonb, $11, $12, $13, to_timestamp($14 / 1000.0))
          RETURNING id, user_id, match_id, champion_played, champion_played_slug, kills, deaths, assists, win, item_ids, champion_kill_counts, queue_id, game_mode, game_duration_seconds, game_ended_at, processed_at`,
         [
-          user.id,
+          syncUser.id,
           matchId,
           participant.championName || "Unknown",
           championProgress.playedChampionSlug || null,
@@ -556,7 +627,7 @@ async function syncRecentMatches(user) {
 
       const championProgression = await getChampionProgressionState(
         client,
-        user.id,
+        syncUser.id,
         championProgress.playedChampionSlug,
       );
       const reward = calculateMatchReward(
@@ -565,7 +636,7 @@ async function syncRecentMatches(user) {
         championProgression,
       );
 
-      await recordChampionProgress(client, user.id, championProgress);
+      await recordChampionProgress(client, syncUser.id, championProgress);
       insertedMatches.push(toMatchDto(result.rows[0]));
       processedRewards.push(reward);
       totalXp += reward.xpAwarded;
@@ -576,11 +647,11 @@ async function syncRecentMatches(user) {
     let rewardClaim = null;
 
     if (processedRewards.length > 0) {
-      await incrementShardInventory(client, user.id, shardTotals);
+      await incrementShardInventory(client, syncUser.id, shardTotals);
 
       const progression = applyXpProgression(
-        user.app_level,
-        user.app_xp,
+        syncUser.app_level,
+        syncUser.app_xp,
         totalXp,
       );
       const userResult = await client.query(
@@ -591,9 +662,9 @@ async function syncRecentMatches(user) {
              checkpoint_game_id = COALESCE($5, checkpoint_game_id),
              updated_at = CURRENT_TIMESTAMP
           WHERE id = $1
-          RETURNING id, summoner_name, tagline, summoner_level, app_level, app_xp, cs_currency, checkpoint_game_id, created_at, updated_at`,
+          RETURNING id, summoner_name, tagline, riot_puuid, summoner_level, app_level, app_xp, cs_currency, checkpoint_game_id, created_at, updated_at`,
         [
-          user.id,
+          syncUser.id,
           progression.appLevel,
           progression.appXp,
           totalCs,
@@ -605,10 +676,11 @@ async function syncRecentMatches(user) {
       rewardClaim = buildRewardClaimPayload(processedRewards, progression);
     } else if (nextCheckpointGameId) {
       updatedUser =
-        (await updateCheckpointGame(client, user.id, nextCheckpointGameId)) || user;
+        (await updateCheckpointGame(client, syncUser.id, nextCheckpointGameId)) ||
+        syncUser;
     }
 
-    await trimStoredMatches(client, user.id);
+    await trimStoredMatches(client, syncUser.id);
     await client.query("COMMIT");
 
     return {
