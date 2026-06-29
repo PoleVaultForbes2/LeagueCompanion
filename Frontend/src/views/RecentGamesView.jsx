@@ -116,6 +116,9 @@ function RecentGameRow({ match }) {
           <p className="mt-1 text-xs font-bold uppercase tracking-widest text-slate-500">
             {match.kda.ratio} KDA
           </p>
+          <p className="mt-1 text-xs font-bold uppercase tracking-widest text-emerald-200">
+            {Number(match.creepScore) || 0} CS
+          </p>
         </div>
       </div>
 

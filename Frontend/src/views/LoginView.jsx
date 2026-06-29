@@ -54,8 +54,8 @@ export default function LoginView({ onAuthenticated }) {
 
   return (
     <main className="min-h-screen bg-[#05070d] text-slate-100 selection:bg-amber-400/30 selection:text-amber-100">
-      <section className="mx-auto grid min-h-screen w-full max-w-6xl grid-cols-1 items-center gap-10 px-6 py-10 lg:grid-cols-[1fr_0.9fr] lg:px-10">
-        <div className="relative min-h-[420px] overflow-hidden rounded-lg border border-cyan-300/15 bg-slate-950 shadow-2xl shadow-cyan-950/30 lg:min-h-[640px]">
+      <section className="mx-auto grid min-h-screen w-full max-w-6xl grid-cols-1 items-center gap-6 px-4 py-6 sm:px-6 sm:py-10 lg:grid-cols-[1fr_0.9fr] lg:gap-10 lg:px-10">
+        <div className="relative order-2 min-h-[240px] overflow-hidden rounded-lg border border-cyan-300/15 bg-slate-950 shadow-2xl shadow-cyan-950/30 sm:min-h-[360px] lg:order-1 lg:min-h-[640px]">
           <img
             alt=""
             className="absolute inset-0 h-full w-full object-cover opacity-80"
@@ -63,19 +63,19 @@ export default function LoginView({ onAuthenticated }) {
           />
           <div className="absolute inset-0 bg-linear-to-r from-slate-950 via-slate-950/50 to-transparent" />
           <div className="absolute inset-x-8 top-8 h-px bg-linear-to-r from-transparent via-cyan-300/60 to-transparent" />
-          <div className="relative flex h-full min-h-[420px] flex-col justify-end p-6 sm:p-8 lg:min-h-[640px]">
+          <div className="relative flex h-full min-h-[240px] flex-col justify-end p-5 sm:min-h-[360px] sm:p-8 lg:min-h-[640px]">
             <div className="max-w-sm">
               <p className="mb-3 text-xs font-bold uppercase tracking-widest text-cyan-200">
                 League Companion
               </p>
-              <h1 className="text-4xl font-black tracking-normal text-slate-50 sm:text-5xl">
+              <h1 className="text-3xl font-black tracking-normal text-slate-50 sm:text-5xl">
                 Collector Login
               </h1>
             </div>
           </div>
         </div>
 
-        <div className="rounded-lg border border-slate-700 bg-slate-900/85 p-6 shadow-2xl shadow-slate-950/50 sm:p-8">
+        <div className="order-1 rounded-lg border border-slate-700 bg-slate-900/85 p-5 shadow-2xl shadow-slate-950/50 sm:p-8 lg:order-2">
           <div className="mb-6 grid grid-cols-2 rounded border border-slate-700 bg-slate-950 p-1">
             <button
               className={`h-11 rounded text-sm font-black uppercase tracking-wide transition ${

@@ -91,6 +91,10 @@ export async function getRecentGames(userId) {
   return requestJson(`/matches/${userId}/recent`);
 }
 
+export async function getGlobalLeaderboard() {
+  return requestJson("/leaderboard/global");
+}
+
 export async function getCraftingState(userId) {
   return requestJson(`/crafting/${userId}`);
 }

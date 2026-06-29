@@ -27,6 +27,7 @@ CREATE TABLE IF NOT EXISTS match_checkpoints (
   kills INT NOT NULL DEFAULT 0,
   deaths INT NOT NULL DEFAULT 0,
   assists INT NOT NULL DEFAULT 0,
+  creep_score INT NOT NULL DEFAULT 0,
   win BOOLEAN NOT NULL,
   item_ids JSONB NOT NULL DEFAULT '[]'::jsonb,
   queue_id INT,

@@ -18,6 +18,7 @@ import {
   upgradeItem,
 } from "../services/userApi";
 import SwarmTrial from "../components/SwarmTrial";
+import GlobalLeaderboardView from "./GlobalLeaderboardView";
 import RecentGamesView from "./RecentGamesView";
 
 const PAGES = [
@@ -400,6 +401,7 @@ export default function HomeView({ user, onLogout, onUserUpdated }) {
   const [currentPageIndex, setCurrentPageIndex] = useState(2);
   const [inventoryTab, setInventoryTab] = useState("shards");
   const [isRecentGamesOpen, setIsRecentGamesOpen] = useState(false);
+  const [isLeaderboardOpen, setIsLeaderboardOpen] = useState(false);
   const [isRegionModalOpen, setIsRegionModalOpen] = useState(false);
   const [selectedMission, setSelectedMission] = useState(null);
   const [missionPrompt, setMissionPrompt] = useState(null);
@@ -416,12 +418,19 @@ export default function HomeView({ user, onLogout, onUserUpdated }) {
   const [selectedCraftItemName, setSelectedCraftItemName] = useState("");
   const [selectedShardKeys, setSelectedShardKeys] = useState([]);
   const autoSyncedUserIdRef = useRef(null);
+  const contentTopRef = useRef(null);
   const displayName = `${user.summonerName}#${user.tagline}`;
   const appXp = Number(user.appXp) || 0;
   const xpToNextLevel = user.xpToNextLevel || 250;
   const xpProgress = Math.min(100, Math.round((appXp / xpToNextLevel) * 100));
   const csCurrency = Number(user.csCurrency) || 0;
   const currentPage = PAGES[currentPageIndex];
+  const menuPageLabel = isRecentGamesOpen
+    ? "Recent Games"
+    : isLeaderboardOpen
+      ? "Global Leaderboard"
+      : currentPage.label;
+  const isMenuPageOpen = isRecentGamesOpen || isLeaderboardOpen;
   const selectedCraftItem = useMemo(
     () =>
       crafting.items.find((item) => item.name === selectedCraftItemName) ||
@@ -527,9 +536,20 @@ export default function HomeView({ user, onLogout, onUserUpdated }) {
     await refreshDashboard();
   }
 
+  function scrollDashboardToTop() {
+    window.requestAnimationFrame(() => {
+      contentTopRef.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+    });
+  }
+
   function goToPage(nextIndex) {
     setCurrentPageIndex(Math.min(Math.max(nextIndex, 0), PAGES.length - 1));
     setIsRecentGamesOpen(false);
+    setIsLeaderboardOpen(false);
+    scrollDashboardToTop();
   }
 
   function openMissionPrompt() {
@@ -617,12 +637,12 @@ export default function HomeView({ user, onLogout, onUserUpdated }) {
     setMissionScene(null);
     setMissionSceneStep(0);
     setMissionCompletion(null);
-    setCurrentPageIndex(2);
+    goToPage(2);
   }
 
   function returnHomeFromSwarm() {
     setSwarmMission(null);
-    setCurrentPageIndex(2);
+    goToPage(2);
   }
 
   function toggleCraftShard(shardKey) {
@@ -802,19 +822,19 @@ export default function HomeView({ user, onLogout, onUserUpdated }) {
   }, [runMatchSync, user.id]);
 
   return (
-    <main className="min-h-screen overflow-hidden bg-[#05070d] text-slate-100 selection:bg-amber-400/30 selection:text-amber-100">
-      <div className="mx-auto flex min-h-screen w-full max-w-7xl flex-col px-4 py-4 sm:px-6 lg:px-8">
+    <main className="min-h-screen overflow-x-hidden bg-[#05070d] text-slate-100 selection:bg-amber-400/30 selection:text-amber-100">
+      <div className="mx-auto flex min-h-screen w-full max-w-7xl flex-col px-3 py-3 sm:px-6 sm:py-4 lg:px-8">
         <div className="overflow-hidden rounded-lg border border-slate-700 bg-slate-950/90 shadow-2xl shadow-slate-950">
-          <header className="flex min-h-20 items-center justify-between gap-3 border-b border-slate-700 bg-slate-900/90 px-4 py-3 sm:px-6">
-            <div className="flex min-w-0 items-center gap-3">
+          <header className="flex min-h-16 items-center justify-between gap-2 border-b border-slate-700 bg-slate-900/90 px-3 py-3 sm:min-h-20 sm:gap-3 sm:px-6">
+            <div className="flex min-w-0 items-center gap-2 sm:gap-3">
               <img
                 alt=""
-                className="h-12 w-12 rounded-full border border-emerald-300/40 object-cover"
+                className="h-10 w-10 rounded-full border border-emerald-300/40 object-cover sm:h-12 sm:w-12"
                 src="/cs_logo.png"
               />
               <div className="relative min-w-0">
                 <button
-                  className="block max-w-[12rem] text-left sm:max-w-xs"
+                  className="block max-w-[9rem] text-left sm:max-w-xs"
                   onClick={() => setIsXpPopoverOpen((current) => !current)}
                   type="button"
                 >
@@ -822,7 +842,7 @@ export default function HomeView({ user, onLogout, onUserUpdated }) {
                     Lv {user.appLevel} - {displayName}
                   </p>
                 </button>
-                <div className="mt-1 h-1.5 w-36 overflow-hidden rounded bg-slate-800">
+                <div className="mt-1 h-1.5 w-28 overflow-hidden rounded bg-slate-800 sm:w-36">
                   <div
                     className="h-full rounded bg-emerald-300"
                     style={{ width: `${xpProgress}%` }}
@@ -847,8 +867,8 @@ export default function HomeView({ user, onLogout, onUserUpdated }) {
               </h1>
             </div>
 
-            <div className="flex items-center gap-2">
-              <div className="flex h-11 items-center gap-2 rounded border border-emerald-300/30 bg-emerald-500/10 px-3 text-xs font-black uppercase tracking-wide text-emerald-100">
+            <div className="flex shrink-0 items-center gap-2">
+              <div className="flex h-10 items-center gap-2 rounded border border-emerald-300/30 bg-emerald-500/10 px-2 text-xs font-black uppercase tracking-wide text-emerald-100 sm:h-11 sm:px-3">
                 <span className="text-emerald-300/70">CS</span>
                 <span>{csCurrency.toLocaleString()}</span>
               </div>
@@ -866,7 +886,7 @@ export default function HomeView({ user, onLogout, onUserUpdated }) {
                 <button
                   aria-expanded={isMenuOpen}
                   aria-label="Open menu"
-                  className="flex h-11 w-11 items-center justify-center rounded border border-slate-700 text-slate-300 transition hover:border-amber-300/60 hover:text-amber-200"
+                  className="flex h-10 w-10 items-center justify-center rounded border border-slate-700 text-slate-300 transition hover:border-amber-300/60 hover:text-amber-200 sm:h-11 sm:w-11"
                   onClick={() => setIsMenuOpen((current) => !current)}
                   type="button"
                 >
@@ -883,11 +903,25 @@ export default function HomeView({ user, onLogout, onUserUpdated }) {
                       className="h-10 w-full rounded px-3 text-left text-sm font-bold text-slate-300 transition hover:bg-slate-800 hover:text-amber-200"
                       onClick={() => {
                         setIsRecentGamesOpen(true);
+                        setIsLeaderboardOpen(false);
                         setIsMenuOpen(false);
+                        scrollDashboardToTop();
                       }}
                       type="button"
                     >
                       View Recent Games
+                    </button>
+                    <button
+                      className="h-10 w-full rounded px-3 text-left text-sm font-bold text-slate-300 transition hover:bg-slate-800 hover:text-amber-200"
+                      onClick={() => {
+                        setIsLeaderboardOpen(true);
+                        setIsRecentGamesOpen(false);
+                        setIsMenuOpen(false);
+                        scrollDashboardToTop();
+                      }}
+                      type="button"
+                    >
+                      Global Leaderboard
                     </button>
                     <button
                       className="h-10 w-full rounded px-3 text-left text-sm font-bold text-slate-300 transition hover:bg-slate-800 hover:text-amber-200 sm:hidden"
@@ -921,15 +955,15 @@ export default function HomeView({ user, onLogout, onUserUpdated }) {
             }`}
           >
             <p className="text-xs font-black uppercase tracking-widest text-slate-300">
-              {isRecentGamesOpen ? "Recent Games" : currentPage.label}
+              {menuPageLabel}
             </p>
             {(syncStatus || syncError) && (
               <p className="text-sm font-semibold">{syncError || syncStatus}</p>
             )}
           </div>
 
-          <div className="relative min-h-[calc(100vh-7rem)]">
-            {!isRecentGamesOpen && (
+          <div className="relative" ref={contentTopRef}>
+            {!isMenuPageOpen && (
               <>
                 <PageArrow
                   direction="left"
@@ -945,22 +979,23 @@ export default function HomeView({ user, onLogout, onUserUpdated }) {
             )}
 
             {isRecentGamesOpen ? (
-              <div className="px-4 py-5 sm:px-6 lg:px-20">
+              <div className="px-3 py-4 sm:px-6 sm:py-5 lg:px-20">
                 <RecentGamesView
-                  onBack={() => {
-                    setIsRecentGamesOpen(false);
-                    setCurrentPageIndex(2);
-                  }}
+                  onBack={() => goToPage(2)}
+                  user={user}
+                />
+              </div>
+            ) : isLeaderboardOpen ? (
+              <div className="px-3 py-4 sm:px-6 sm:py-5 lg:px-20">
+                <GlobalLeaderboardView
+                  onBack={() => goToPage(2)}
                   user={user}
                 />
               </div>
             ) : (
-              <div className="overflow-hidden">
-                <div
-                  className="flex transition-transform duration-500 ease-out"
-                  style={{ transform: `translateX(-${currentPageIndex * 100}%)` }}
-                >
-                  <PagePane>
+              <div>
+                {currentPage.key === "MISSIONS" && (
+                  <PagePane key="MISSIONS">
                     <MissionsPage
                       isRegionProgressLoading={isRegionProgressLoading}
                       isMissionLoading={isMissionLoading}
@@ -970,7 +1005,9 @@ export default function HomeView({ user, onLogout, onUserUpdated }) {
                       regionProgress={regionProgress}
                     />
                   </PagePane>
-                  <PagePane>
+                )}
+                {currentPage.key === "ROSTER" && (
+                  <PagePane key="ROSTER">
                     <RosterPage
                       championSearch={championSearch}
                       champions={filteredChampionRoster}
@@ -979,7 +1016,9 @@ export default function HomeView({ user, onLogout, onUserUpdated }) {
                       setChampionSearch={setChampionSearch}
                     />
                   </PagePane>
-                  <PagePane>
+                )}
+                {currentPage.key === "MAP_HOME" && (
+                  <PagePane key="MAP_HOME">
                     <MapHomePage
                       activeMission={missionState.activeMission}
                       isLoadoutLoading={isLoadoutLoading}
@@ -987,7 +1026,9 @@ export default function HomeView({ user, onLogout, onUserUpdated }) {
                       onMapSelected={openMissionPrompt}
                     />
                   </PagePane>
-                  <PagePane>
+                )}
+                {currentPage.key === "INVENTORY" && (
+                  <PagePane key="INVENTORY">
                     <InventoryPage
                       csCurrency={csCurrency}
                       inventory={inventory}
@@ -1003,7 +1044,9 @@ export default function HomeView({ user, onLogout, onUserUpdated }) {
                       setItemSortMode={setItemSortMode}
                     />
                   </PagePane>
-                  <PagePane>
+                )}
+                {currentPage.key === "CRAFTING" && (
+                  <PagePane key="CRAFTING">
                     <CraftingPage
                       craftingSearch={craftingSearch}
                       inventory={inventory}
@@ -1021,7 +1064,7 @@ export default function HomeView({ user, onLogout, onUserUpdated }) {
                       toggleCraftShard={toggleCraftShard}
                     />
                   </PagePane>
-                </div>
+                )}
               </div>
             )}
           </div>
@@ -1096,8 +1139,8 @@ function PageArrow({ direction, disabled, onClick }) {
   return (
     <button
       aria-label={isLeft ? "Previous page" : "Next page"}
-      className={`fixed top-1/2 z-20 flex h-16 w-12 -translate-y-1/2 items-center justify-center rounded border border-cyan-300/30 bg-slate-950/90 text-4xl font-black text-cyan-100 shadow-2xl shadow-cyan-950/40 transition hover:border-amber-300 hover:text-amber-200 disabled:cursor-not-allowed disabled:border-slate-700 disabled:text-slate-700 sm:h-20 sm:w-14 ${
-        isLeft ? "left-2 sm:left-5" : "right-2 sm:right-5"
+      className={`fixed bottom-4 z-20 flex h-12 w-12 items-center justify-center rounded border border-cyan-300/30 bg-slate-950/90 text-2xl font-black text-cyan-100 shadow-2xl shadow-cyan-950/40 transition hover:border-amber-300 hover:text-amber-200 disabled:cursor-not-allowed disabled:border-slate-700 disabled:text-slate-700 sm:bottom-auto sm:top-1/2 sm:h-20 sm:w-14 sm:-translate-y-1/2 sm:text-4xl ${
+        isLeft ? "left-3 sm:left-5" : "right-3 sm:right-5"
       }`}
       disabled={disabled}
       onClick={onClick}
@@ -1109,13 +1152,17 @@ function PageArrow({ direction, disabled, onClick }) {
 }
 
 function PagePane({ children }) {
-  return <section className="min-w-full px-4 py-5 sm:px-6 lg:px-20">{children}</section>;
+  return (
+    <section className="px-3 py-4 pb-20 sm:px-6 sm:py-5 sm:pb-5 lg:px-20">
+      {children}
+    </section>
+  );
 }
 
 function PagePanel({ children, className = "" }) {
   return (
     <div
-      className={`min-h-[calc(100vh-10rem)] rounded-lg border border-slate-700 bg-slate-900/80 p-5 shadow-xl shadow-slate-950/40 sm:p-6 ${className}`}
+      className={`rounded-lg border border-slate-700 bg-slate-900/80 p-4 shadow-xl shadow-slate-950/40 sm:p-6 ${className}`}
     >
       {children}
     </div>
@@ -1314,7 +1361,7 @@ function RosterPage({
           <p className="text-xs font-bold uppercase tracking-widest text-cyan-200">
             Champions Roster
           </p>
-          <h2 className="mt-1 text-3xl font-black tracking-normal text-slate-50">
+          <h2 className="mt-1 text-2xl font-black tracking-normal text-slate-50 sm:text-3xl">
             Champion Vault
           </h2>
         </div>
@@ -1340,10 +1387,10 @@ function RosterPage({
           No champions found.
         </div>
       ) : (
-        <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4">
+        <div className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3 xl:grid-cols-4">
           {champions.map((champion) => (
             <button
-              className={`rounded-lg border border-slate-700 bg-slate-950/70 p-4 text-left transition hover:-translate-y-0.5 hover:border-cyan-300/40 ${
+              className={`rounded-lg border border-slate-700 bg-slate-950/70 p-3 text-left transition hover:-translate-y-0.5 hover:border-cyan-300/40 sm:p-4 ${
                 champion.isUnlocked ? "" : "grayscale contrast-75 brightness-50"
               }`}
               key={champion.slug || champion.name}
@@ -1357,19 +1404,19 @@ function RosterPage({
                   src={champion.assetPath}
                 />
               </div>
-              <div className="flex items-center justify-between gap-3">
-                <p className="truncate text-lg font-black text-slate-100">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
+                <p className="max-w-full truncate text-sm font-black text-slate-100 sm:text-lg">
                   {champion.name}
                 </p>
-                <span className="rounded border border-slate-700 px-2 py-1 text-xs font-black uppercase tracking-wide text-slate-400">
+                <span className="w-fit rounded border border-slate-700 px-2 py-1 text-[10px] font-black uppercase tracking-wide text-slate-400 sm:text-xs">
                   {champion.isUnlocked ? "Ready" : "Locked"}
                 </span>
               </div>
               <div className="mt-3 flex flex-wrap gap-2">
-                <span className="rounded border border-cyan-300/25 bg-cyan-500/10 px-2 py-1 text-xs font-black uppercase tracking-wide text-cyan-100">
+                <span className="max-w-full truncate rounded border border-cyan-300/25 bg-cyan-500/10 px-2 py-1 text-[10px] font-black uppercase tracking-wide text-cyan-100 sm:text-xs">
                   {champion.role || "Role"}
                 </span>
-                <span className="rounded border border-amber-300/25 bg-amber-500/10 px-2 py-1 text-xs font-black uppercase tracking-wide text-amber-100">
+                <span className="max-w-full truncate rounded border border-amber-300/25 bg-amber-500/10 px-2 py-1 text-[10px] font-black uppercase tracking-wide text-amber-100 sm:text-xs">
                   {champion.region || "Region"}
                 </span>
               </div>
@@ -1404,13 +1451,13 @@ function InventoryPage({
           <p className="text-xs font-bold uppercase tracking-widest text-cyan-200">
             Collection
           </p>
-          <h2 className="mt-1 text-3xl font-black tracking-normal text-slate-50">
+          <h2 className="mt-1 text-2xl font-black tracking-normal text-slate-50 sm:text-3xl">
             Inventory & Shards
           </h2>
         </div>
 
-        <div className="flex flex-col gap-2 sm:items-end">
-          <div className="grid grid-cols-2 rounded border border-slate-700 bg-slate-950 p-1">
+        <div className="flex w-full flex-col gap-2 sm:w-auto sm:items-end">
+          <div className="grid w-full grid-cols-2 rounded border border-slate-700 bg-slate-950 p-1 sm:w-auto">
             {["shards", "items"].map((tab) => (
               <button
                 className={`h-10 rounded px-4 text-sm font-black uppercase tracking-wide transition ${
@@ -1428,7 +1475,7 @@ function InventoryPage({
           </div>
 
           {inventoryTab === "items" && (
-            <label className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-slate-500">
+            <label className="flex items-center justify-between gap-2 text-xs font-bold uppercase tracking-widest text-slate-500 sm:justify-start">
               Sort
               <select
                 className="h-9 rounded border border-slate-700 bg-slate-950 px-3 text-sm font-black uppercase tracking-wide text-slate-200 outline-none transition focus:border-cyan-300"
@@ -1441,7 +1488,7 @@ function InventoryPage({
             </label>
           )}
           {inventoryTab === "shards" && (
-            <p className="text-xs font-bold uppercase tracking-widest text-slate-500">
+            <p className="text-xs font-bold uppercase tracking-widest text-slate-500 sm:text-right">
               {shardShop.costPerShard} CS per shard
             </p>
           )}
@@ -1454,7 +1501,7 @@ function InventoryPage({
             Loading collection...
           </div>
         ) : (
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {inventory.shards.map((shard) => (
               <ShardSlot
                 costPerShard={shardShop.costPerShard}
@@ -1607,10 +1654,10 @@ function CraftingPage({
           Crafting Circle
         </p>
         <div className="mt-1 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-          <h2 className="text-3xl font-black tracking-normal text-slate-50">
+          <h2 className="text-2xl font-black tracking-normal text-slate-50 sm:text-3xl">
             Crafting Table
           </h2>
-          <div className="grid gap-2 sm:grid-cols-[minmax(180px,260px)_auto]">
+          <div className="grid w-full gap-2 sm:w-auto sm:grid-cols-[minmax(180px,260px)_auto]">
             <label className="block">
               <span className="sr-only">Search items</span>
               <input
@@ -1621,7 +1668,7 @@ function CraftingPage({
                 value={craftingSearch}
               />
             </label>
-            <label className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-slate-500">
+            <label className="flex items-center justify-between gap-2 text-xs font-bold uppercase tracking-widest text-slate-500 sm:justify-start">
               Sort
               <select
                 className="h-11 rounded border border-slate-700 bg-slate-950 px-3 text-sm font-black uppercase tracking-wide text-slate-200 outline-none transition focus:border-cyan-300"
@@ -1641,7 +1688,7 @@ function CraftingPage({
           <p className="mb-3 text-xs font-bold uppercase tracking-widest text-slate-500">
             Item
           </p>
-          <div className="grid max-h-[520px] gap-2 overflow-y-auto pr-1">
+          <div className="grid max-h-[280px] gap-2 overflow-y-auto pr-1 sm:max-h-[380px] xl:max-h-[520px]">
             {items.length === 0 && (
               <div className="rounded border border-slate-800 bg-slate-900 px-3 py-4 text-sm font-bold text-slate-500">
                 No items match your search.
@@ -1665,7 +1712,7 @@ function CraftingPage({
                     {item.category?.label || "Item"}
                   </span>
                 </span>
-                <span className="ml-auto flex shrink-0 items-center gap-2">
+                <span className="ml-auto flex shrink-0 flex-col items-end gap-1 sm:flex-row sm:items-center sm:gap-2">
                   {item.isOwned && (
                     <span className="rounded border border-slate-700 px-2 py-1 text-[10px] font-black uppercase tracking-wide text-slate-400">
                       Lv {item.level}
@@ -1682,11 +1729,11 @@ function CraftingPage({
           </div>
         </div>
 
-        <div className="flex min-h-[520px] flex-col items-center justify-center rounded border border-slate-700 bg-[radial-gradient(circle_at_50%_42%,rgba(250,204,21,0.14),transparent_28%),linear-gradient(145deg,rgba(15,23,42,0.96),rgba(2,6,23,0.98))] p-5">
-          <div className="relative flex aspect-square w-full max-w-[360px] items-center justify-center rounded-full border border-stone-500/60 bg-stone-900 shadow-2xl shadow-slate-950">
+        <div className="flex min-h-[360px] flex-col items-center justify-center rounded border border-slate-700 bg-[radial-gradient(circle_at_50%_42%,rgba(250,204,21,0.14),transparent_28%),linear-gradient(145deg,rgba(15,23,42,0.96),rgba(2,6,23,0.98))] p-4 sm:min-h-[460px] sm:p-5 xl:min-h-[520px]">
+          <div className="relative flex aspect-square w-full max-w-[280px] items-center justify-center rounded-full border border-stone-500/60 bg-stone-900 shadow-2xl shadow-slate-950 sm:max-w-[360px]">
             <div className="absolute inset-5 rounded-full border border-stone-400/20" />
             <div className="absolute inset-12 rounded-full border border-amber-300/20" />
-            <div className="z-10 flex h-32 w-32 items-center justify-center rounded-full border border-amber-300/40 bg-slate-950 p-5 shadow-xl shadow-amber-950/30">
+            <div className="z-10 flex h-28 w-28 items-center justify-center rounded-full border border-amber-300/40 bg-slate-950 p-5 shadow-xl shadow-amber-950/30 sm:h-32 sm:w-32">
               <img
                 alt=""
                 className="h-full w-full object-contain"
@@ -1701,7 +1748,7 @@ function CraftingPage({
           </p>
 
           <button
-            className="mt-6 h-12 rounded bg-amber-400 px-8 text-sm font-black uppercase tracking-wide text-slate-950 shadow-lg shadow-amber-950/30 transition hover:bg-amber-300 disabled:cursor-not-allowed disabled:bg-slate-600 disabled:text-slate-300"
+            className="mt-6 h-12 w-full rounded bg-amber-400 px-8 text-sm font-black uppercase tracking-wide text-slate-950 shadow-lg shadow-amber-950/30 transition hover:bg-amber-300 disabled:cursor-not-allowed disabled:bg-slate-600 disabled:text-slate-300 sm:w-auto"
             disabled={!canSubmitSelectedAction || isCrafting}
             onClick={handleSelectedAction}
             type="button"
@@ -1791,7 +1838,7 @@ function CraftingPage({
             <p className="mb-3 text-xs font-bold uppercase tracking-widest text-slate-500">
               Shards
             </p>
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-2">
               {inventory.shards.map((shard) => {
                 const isSelected = selectedShardKeys.includes(shard.key);
 
@@ -1848,7 +1895,7 @@ function ShardSlot({
 
   return (
     <article
-      className="rounded-lg border bg-slate-950/70 p-4 transition hover:-translate-y-0.5 hover:bg-slate-950"
+      className="flex h-full flex-col rounded-lg border bg-slate-950/70 p-4 transition hover:-translate-y-0.5 hover:bg-slate-950"
       style={{
         borderColor: shard.theme?.accent,
         boxShadow: `0 0 24px ${shard.theme?.glow}`,
@@ -1886,40 +1933,47 @@ function ShardSlot({
           {shard.quantity.toLocaleString()}
         </p>
       </div>
-      <div className="mt-4 flex items-center gap-2">
-        <div className="grid h-8 grid-cols-[1.75rem_2.5rem_1.75rem] overflow-hidden rounded border border-slate-700 bg-slate-950">
-          <button
-            className="text-sm font-black text-slate-400 transition hover:bg-slate-900 hover:text-slate-100 disabled:text-slate-700"
-            disabled={selectedQuantity <= 1 || isBuyingShard}
-            onClick={() => updatePurchaseQuantity(selectedQuantity - 1)}
-            type="button"
-          >
-            -
-          </button>
-          <input
-            aria-label={`${shard.displayName} buy quantity`}
-            className="w-full border-x border-slate-800 bg-transparent text-center text-xs font-black text-slate-200 outline-none"
-            min="1"
-            onChange={(event) => updatePurchaseQuantity(event.target.value)}
-            type="number"
-            value={selectedQuantity}
-          />
-          <button
-            className="text-sm font-black text-slate-400 transition hover:bg-slate-900 hover:text-slate-100 disabled:text-slate-700"
-            disabled={selectedQuantity >= maxAffordableQuantity || isBuyingShard}
-            onClick={() => updatePurchaseQuantity(selectedQuantity + 1)}
-            type="button"
-          >
-            +
-          </button>
+      <div className="mt-auto pt-4">
+        <div className="flex items-center justify-between gap-3 rounded border border-slate-700 bg-slate-950 px-2 py-2">
+          <span className="text-[10px] font-black uppercase tracking-wide text-slate-500">
+            Buy Qty
+          </span>
+          <div className="grid h-9 min-w-[7rem] grid-cols-[2rem_minmax(2.75rem,1fr)_2rem] overflow-hidden rounded border border-slate-700 bg-slate-900">
+            <button
+              aria-label={`Decrease ${shard.displayName} quantity`}
+              className="text-sm font-black text-slate-400 transition hover:bg-slate-800 hover:text-slate-100 disabled:text-slate-700"
+              disabled={selectedQuantity <= 1 || isBuyingShard}
+              onClick={() => updatePurchaseQuantity(selectedQuantity - 1)}
+              type="button"
+            >
+              -
+            </button>
+            <input
+              aria-label={`${shard.displayName} buy quantity`}
+              className="w-full border-x border-slate-800 bg-transparent text-center text-sm font-black text-slate-100 outline-none"
+              min="1"
+              onChange={(event) => updatePurchaseQuantity(event.target.value)}
+              type="number"
+              value={selectedQuantity}
+            />
+            <button
+              aria-label={`Increase ${shard.displayName} quantity`}
+              className="text-sm font-black text-slate-400 transition hover:bg-slate-800 hover:text-slate-100 disabled:text-slate-700"
+              disabled={selectedQuantity >= maxAffordableQuantity || isBuyingShard}
+              onClick={() => updatePurchaseQuantity(selectedQuantity + 1)}
+              type="button"
+            >
+              +
+            </button>
+          </div>
         </div>
         <button
-          className="h-8 flex-1 rounded border border-slate-700 bg-slate-900/80 px-2 text-[11px] font-black uppercase tracking-wide text-emerald-200 transition hover:border-emerald-300/40 hover:bg-slate-900 disabled:cursor-not-allowed disabled:border-slate-800 disabled:bg-slate-900/40 disabled:text-slate-600"
+          className="mt-2 h-10 w-full rounded border border-slate-700 bg-slate-900/80 px-3 text-xs font-black uppercase tracking-wide text-emerald-200 transition hover:border-emerald-300/40 hover:bg-slate-900 disabled:cursor-not-allowed disabled:border-slate-800 disabled:bg-slate-900/40 disabled:text-slate-600"
           disabled={!canBuy}
           onClick={() => onBuyShard(shard, selectedQuantity)}
           type="button"
         >
-          {isBuyingShard ? "Buying..." : `Buy - ${totalCost} CS`}
+          {isBuyingShard ? "Buying..." : `Buy for ${totalCost} CS`}
         </button>
       </div>
     </article>

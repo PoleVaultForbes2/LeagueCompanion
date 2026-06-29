@@ -13,6 +13,7 @@ import {
 import {
   applyXpProgression,
   buildRewardClaimPayload,
+  calculateCreepScore,
   calculateMatchReward,
   getParticipantItemIds,
   getXpForNextLevel,
@@ -46,6 +47,7 @@ function toMatchDto(row) {
     kills: row.kills,
     deaths: row.deaths,
     assists: row.assists,
+    creepScore: Number(row.creep_score) || 0,
     win: row.win,
     queueId: row.queue_id,
     gameMode: row.game_mode,
@@ -121,6 +123,7 @@ function toRecentGameDto(row, itemDictionary, dataDragonVersion) {
       text: getKdaText(row),
       ratio: getKdaRatio(row),
     },
+    creepScore: Number(row.creep_score) || 0,
     items: itemIds.map((itemId) => {
       const item = itemDictionary.get(itemId);
 
@@ -205,6 +208,7 @@ async function ensureMatchSyncColumns(db) {
       ADD COLUMN IF NOT EXISTS item_ids JSONB NOT NULL DEFAULT '[]'::jsonb,
       ADD COLUMN IF NOT EXISTS champion_played_slug VARCHAR(80),
       ADD COLUMN IF NOT EXISTS champion_kill_counts JSONB NOT NULL DEFAULT '{}'::jsonb,
+      ADD COLUMN IF NOT EXISTS creep_score INT NOT NULL DEFAULT 0,
       ADD COLUMN IF NOT EXISTS queue_id INT,
       ADD COLUMN IF NOT EXISTS game_mode VARCHAR(40),
       ADD COLUMN IF NOT EXISTS game_duration_seconds INT,
@@ -388,9 +392,10 @@ async function backfillRecentMatchMetadata(db, user, row) {
            queue_id = COALESCE(queue_id, $3),
            game_mode = COALESCE(game_mode, $4),
            game_duration_seconds = COALESCE(game_duration_seconds, $5),
-           game_ended_at = COALESCE(game_ended_at, to_timestamp($6 / 1000.0))
+           game_ended_at = COALESCE(game_ended_at, to_timestamp($6 / 1000.0)),
+           creep_score = $7
        WHERE id = $1
-       RETURNING id, user_id, match_id, champion_played, kills, deaths, assists, win, item_ids, queue_id, game_mode, game_duration_seconds, game_ended_at, processed_at`,
+       RETURNING id, user_id, match_id, champion_played, kills, deaths, assists, win, item_ids, creep_score, queue_id, game_mode, game_duration_seconds, game_ended_at, processed_at`,
       [
         row.id,
         JSON.stringify(getParticipantItemIds(participant)),
@@ -398,6 +403,7 @@ async function backfillRecentMatchMetadata(db, user, row) {
         match.info?.gameMode || null,
         Number(match.info?.gameDuration) || null,
         Number(match.info?.gameEndTimestamp || match.info?.gameStartTimestamp || Date.now()),
+        calculateCreepScore(participant),
       ],
     );
 
@@ -583,6 +589,17 @@ async function syncRecentMatches(user) {
         continue;
       }
 
+      const championProgression = await getChampionProgressionState(
+        client,
+        syncUser.id,
+        championProgress.playedChampionSlug,
+      );
+      const reward = calculateMatchReward(
+        participant,
+        itemDictionary,
+        championProgression,
+      );
+
       const result = await client.query(
         `INSERT INTO match_checkpoints
          (
@@ -596,13 +613,14 @@ async function syncRecentMatches(user) {
            win,
            item_ids,
            champion_kill_counts,
+           creep_score,
            queue_id,
            game_mode,
            game_duration_seconds,
            game_ended_at
          )
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10::jsonb, $11, $12, $13, to_timestamp($14 / 1000.0))
-         RETURNING id, user_id, match_id, champion_played, champion_played_slug, kills, deaths, assists, win, item_ids, champion_kill_counts, queue_id, game_mode, game_duration_seconds, game_ended_at, processed_at`,
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10::jsonb, $11, $12, $13, $14, to_timestamp($15 / 1000.0))
+         RETURNING id, user_id, match_id, champion_played, champion_played_slug, kills, deaths, assists, creep_score, win, item_ids, champion_kill_counts, queue_id, game_mode, game_duration_seconds, game_ended_at, processed_at`,
         [
           syncUser.id,
           matchId,
@@ -614,6 +632,7 @@ async function syncRecentMatches(user) {
           Boolean(participant.win),
           JSON.stringify(getParticipantItemIds(participant)),
           JSON.stringify({}),
+          reward.csAwarded,
           Number(info.queueId) || null,
           info.gameMode || null,
           Number(info.gameDuration) || null,
@@ -624,17 +643,6 @@ async function syncRecentMatches(user) {
       if (!result.rows[0]) {
         continue;
       }
-
-      const championProgression = await getChampionProgressionState(
-        client,
-        syncUser.id,
-        championProgress.playedChampionSlug,
-      );
-      const reward = calculateMatchReward(
-        participant,
-        itemDictionary,
-        championProgression,
-      );
 
       await recordChampionProgress(client, syncUser.id, championProgress);
       insertedMatches.push(toMatchDto(result.rows[0]));
@@ -746,7 +754,7 @@ router.get("/:userId/recent", async (req, res) => {
     }
 
     const result = await pool.query(
-      `SELECT id, user_id, match_id, champion_played, kills, deaths, assists, win, item_ids, queue_id, game_mode, game_duration_seconds, game_ended_at, processed_at
+      `SELECT id, user_id, match_id, champion_played, kills, deaths, assists, creep_score, win, item_ids, queue_id, game_mode, game_duration_seconds, game_ended_at, processed_at
        FROM match_checkpoints
        WHERE user_id = $1
        ORDER BY processed_at DESC

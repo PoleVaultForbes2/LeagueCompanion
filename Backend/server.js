@@ -14,6 +14,7 @@ import craftingRouter from "./routes/crafting.js";
 import championRouter from "./routes/champions.js";
 import loadoutRouter from "./routes/loadout.js";
 import missionRouter from "./routes/missions.js";
+import leaderboardRouter from "./routes/leaderboard.js";
 
 dotenv.config();
 const app = express();
@@ -82,6 +83,7 @@ app.use("/api/crafting", craftingRouter);
 app.use("/api/champions", championRouter);
 app.use("/api/loadout", loadoutRouter);
 app.use("/api/missions", missionRouter);
+app.use("/api/leaderboard", leaderboardRouter);
 app.use("/api", statsRouter);
 app.use("/api/groups", groupRouter);
 
